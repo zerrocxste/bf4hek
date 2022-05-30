@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{08e48396-bc3c-4a2e-9a1c-28a7f6972300}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\console">
+      <UniqueIdentifier>{1fa47a1b-87ed-4592-88f0-e9610d9de283}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\memory_utils">
+      <UniqueIdentifier>{a06bd0a1-0486-4de6-953c-37e9098a5dac}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\dllmain.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\console\console.cpp">
+      <Filter>src\console</Filter>
+    </ClCompile>
+    <ClCompile Include="src\memory_utils\memory_utils.cpp">
+      <Filter>src\memory_utils</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\alternative.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\console\console.h">
+      <Filter>src\console</Filter>
+    </ClInclude>
+    <ClInclude Include="src\memory_utils\memory_utils.h">
+      <Filter>src\memory_utils</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
