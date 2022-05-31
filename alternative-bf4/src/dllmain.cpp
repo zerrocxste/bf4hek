@@ -1,11 +1,5 @@
 ﻿#include "alternative.h"
 
-#ifdef _WIN64
-#define PTRMAXVAL ((PVOID)0x000F000000000000)
-#elif _WIN32
-#define PTRMAXVAL ((PVOID)0xFFF00000)
-#endif
-
 class CShellCodeHelper
 {
 private:
@@ -240,12 +234,12 @@ void SoldierEspHack()
 		"41 0F ? ? ? ? ? ? 0F 94 ? 88 44"
 	*/
 
-	auto vischeck = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x41\x0F\x00\x00\x00\x00\x00\x00\x0F\x94\x00\x88\x44", "xx??????xx?xx");
+	/*auto vischeck = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x41\x0F\x00\x00\x00\x00\x00\x00\x0F\x94\x00\x88\x44", "xx??????xx?xx");
 
 	if (!vischeck)
 		return;
 
-	memory_utils::patch_instruction(vischeck, "\xB8\x00\x00\x00\x00\x90\x90\x90", 8);
+	memory_utils::patch_instruction(vischeck, "\xB8\x00\x00\x00\x00\x90\x90\x90", 8);*/
 }
 
 std::uintptr_t GetEntityList()
@@ -258,10 +252,10 @@ std::uintptr_t GetEntityList()
 
 void HackThread(void* arg)
 {
-    if (!Console::Attach("debug"))
-        return;
+	if (!Console::Attach("debug"))
+		return;
 
-    printf("[+] Attach successfully\n");
+	printf("[+] Attach successfully\n");
 
 	if (!CreateHack())
 	{
@@ -273,8 +267,8 @@ void HackThread(void* arg)
 
 	SoldierEspHack();
 
-    while (!GetAsyncKeyState(VK_DELETE))
-    {
+	while (!GetAsyncKeyState(VK_DELETE))
+	{
 		auto entlist = GetEntityList();
 
 		if (!entlist)
@@ -302,25 +296,25 @@ void HackThread(void* arg)
 		printf("\n\n/////////////// END //////////////////\n");
 
 		Sleep(1);
-    }
+	}
 
-    FreeLibraryAndExitThread((HMODULE)arg, 0);
+	FreeLibraryAndExitThread((HMODULE)arg, 0);
 }
 
 BOOL APIENTRY DllMain( HMODULE hModule,
-                       DWORD  ul_reason_for_call,
-                       LPVOID lpReserved
-                     )
+					   DWORD  ul_reason_for_call,
+					   LPVOID lpReserved
+					 )
 {
-    switch (ul_reason_for_call)
-    {
-    case DLL_PROCESS_ATTACH:
-        CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)HackThread, hModule, 0, nullptr);
-        break;
-    case DLL_THREAD_ATTACH:
-    case DLL_THREAD_DETACH:
-    case DLL_PROCESS_DETACH:
-        break;
-    }
-    return TRUE;
+	switch (ul_reason_for_call)
+	{
+	case DLL_PROCESS_ATTACH:
+		CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE)HackThread, hModule, 0, nullptr);
+		break;
+	case DLL_THREAD_ATTACH:
+	case DLL_THREAD_DETACH:
+	case DLL_PROCESS_DETACH:
+		break;
+	}
+	return TRUE;
 }
