@@ -53,18 +53,18 @@ public:
 			MEMORY_BASIC_INFORMATION mbi{};
 			ZeroMemory(&mbi, sizeof(MEMORY_BASIC_INFORMATION));
 		retry:
-			while (allocation_address < end && VirtualQuery((void*)allocation_address, &mbi, sizeof(mbi)))
+			while (allocation_address < end)
 			{
+				if (!VirtualQuery((void*)allocation_address, &mbi, sizeof(mbi)))
+					return false;
+
 				if (mbi.State == MEM_FREE)
 				{
-#ifdef _WIN64
-					printf("[+]%s. Found free memory region: 0x%I64X\n", __FUNCTION__, mbi.BaseAddress);
-#else
-					printf("[+]%s. Found free memory region: 0x%I32X\n", __FUNCTION__, mbi.BaseAddress);
-#endif // _WIN64
+					printf("[+] %s. Found free memory region: 0x%p\n", __FUNCTION__, mbi.BaseAddress);
 					allocation_address = (DWORD64)mbi.BaseAddress;
 					break;
 				}
+
 				allocation_address += mbi.RegionSize;
 			}
 
@@ -72,23 +72,13 @@ public:
 
 			if (m_shellcode_allocated_memory == NULL)
 			{
-				if (allocation_address < end)
-				{
-					printf("[+]%s. Failed allocate memory, retry...\n", __FUNCTION__);
-					allocation_address += mbi.RegionSize;
-					goto retry;
-				}
-				printf("[+]%s. Failed allocate memory\n", __FUNCTION__);
-				return false;
+				printf("[+] %s. Failed allocate memory, retry...\n", __FUNCTION__);
+				allocation_address += mbi.RegionSize;
+				goto retry;
 			}
 		}
 
-#ifdef _WIN64
-		printf("[+]%s. Shellcode allocated page: 0x%I64X\n", __FUNCTION__, (DWORD_PTR)m_shellcode_allocated_memory);
-#else
-		printf("[+]%s. Shellcode allocated page: 0x%I32X\n", __FUNCTION__, (DWORD_PTR)m_shellcode_allocated_memory);
-#endif // _WIN64
-
+		printf("[+] %s. Shellcode allocated page: 0x%p\n", __FUNCTION__, m_shellcode_allocated_memory);
 		status_ok = true;
 		return true;
 	}
@@ -97,7 +87,7 @@ public:
 	{
 		if (shellcode == NULL || replace_byte_instruction_length == NULL || !status_ok)
 		{
-			printf("[+]%s. U are autistic\n", __FUNCTION__);
+			printf("[+] %s. U are autistic\n", __FUNCTION__);
 			return false;
 		}
 
@@ -151,7 +141,25 @@ CShellCodeHelper* g_pEntityListGrabber;
 
 void* g_RAX_REGISTER_SPECIAL = 0;
 
-bool CreateHack()
+int g_MyTeamID = 1;
+
+std::uintptr_t GetLocalPlayer()
+{
+	if (!g_RAX_REGISTER_SPECIAL)
+		return 0;
+
+	return *(std::uintptr_t*)((std::uintptr_t)(g_RAX_REGISTER_SPECIAL) + 0x470);
+}
+
+std::uintptr_t GetEntityList()
+{
+	if (!g_RAX_REGISTER_SPECIAL)
+		return 0;
+
+	return (std::uintptr_t)(g_RAX_REGISTER_SPECIAL) + 0x28;
+}
+
+void CreateEntityListHack()
 {
 	g_pEntityListGrabber = new CShellCodeHelper();
 
@@ -163,10 +171,13 @@ bool CreateHack()
 	auto PatchAddress = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x48\x8B\x00\x48\x3B\x00\x00\x74\x00\x66\x00\x48\x8B\x00\x48\x3B", "xx?xx??x?x?xx?xx");
 
 	if (!PatchAddress)
-		return false;
+	{
+		printf("[-] %s -> not found\n", __FUNCTION__);
+		return;
+	}
 
 	if (!g_pEntityListGrabber->setup((void*)PatchAddress))
-		return false;
+		return;
 
 	BYTE Patch[] = {
 
@@ -177,7 +188,7 @@ bool CreateHack()
 
 	*(std::uintptr_t*)((std::uintptr_t)Patch + 0x9) = (std::uintptr_t)&g_RAX_REGISTER_SPECIAL;
 
-	return g_pEntityListGrabber->patch(Patch, sizeof(Patch), 7);
+	g_pEntityListGrabber->patch(Patch, sizeof(Patch), 7);
 }
 
 void VehicleEspHack()
@@ -188,14 +199,15 @@ void VehicleEspHack()
 		"83 79 50 ? 0F 94"
 	*/
 
-	auto p1 = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x83\x79\x50\x00\x0F\x94", "xxx?xx");
+	auto checkSpottedInstruction = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x83\x79\x50\x00\x0F\x94", "xxx?xx");
 
-	if (!p1)
+	if (!checkSpottedInstruction)
+	{
+		printf("[-] %s -> not found checkSpottedInstruction\n", __FUNCTION__);
 		return;
+	}
 
-	p1 += 0x3;
-
-	memory_utils::patch_instruction(p1, "\x00", 1);
+	memory_utils::patch_instruction(checkSpottedInstruction, "\xB0\x01\x90\x90\x90\x90\x90", 7); //mov al, 1 ... nop
 
 	/*
 		Address of signature = bf4.exe + 0x002A949F
@@ -203,15 +215,20 @@ void VehicleEspHack()
 		"83 F8 ? 74 ? 40 84 ? 74 ? 83 F8"
 	*/
 
-	auto p2 = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x83\xF8\x00\x74\x00\x40\x84\x00\x74\x00\x83\xF8", "xx?x?xx?x?xx");
+	auto checkSpottedInstruction2 = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x83\xF8\x00\x74\x00\x40\x84\x00\x74\x00\x83\xF8", "xx?x?xx?x?xx");
 
-	if (!p2)
+	if (!checkSpottedInstruction2)
+	{
+		printf("[-] %s -> not found checkSpottedInstruction2\n", __FUNCTION__);
 		return;
+	}
 
-	p2 += 0x2;
+	checkSpottedInstruction2 += 0x3;
 
-	memory_utils::patch_instruction(p2, "\x00", 1);
+	memory_utils::patch_instruction(checkSpottedInstruction2, "\xEB", 1);
 }
+
+CShellCodeHelper* g_pVisibleCheckPatch;
 
 void SoldierEspHack()
 {
@@ -221,12 +238,15 @@ void SoldierEspHack()
 		"75 ? 41 8B ? ? 89 43"
 	*/
 
-	auto p = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x75\x00\x41\x8B\x00\x00\x89\x43", "x?xx??xx");
+	auto checkSpottedInstruction = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x75\x00\x41\x8B\x00\x00\x89\x43", "x?xx??xx");
 
-	if (!p)
+	if (!checkSpottedInstruction)
+	{
+		printf("[-] %s -> not found p\n", __FUNCTION__);
 		return;
+	}
 
-	memory_utils::fill_memory_region(p, 0x90, 2);
+	memory_utils::fill_memory_region(checkSpottedInstruction, 0x90, 2);
 
 	/*
 		Address of signature = bf4.exe + 0x002924E7
@@ -234,20 +254,35 @@ void SoldierEspHack()
 		"41 0F ? ? ? ? ? ? 0F 94 ? 88 44"
 	*/
 
-	/*auto vischeck = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x41\x0F\x00\x00\x00\x00\x00\x00\x0F\x94\x00\x88\x44", "xx??????xx?xx");
+	auto visibleCheckInstruction = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x41\x0F\x00\x00\x00\x00\x00\x00\x0F\x94\x00\x88\x44", "xx??????xx?xx");
 
-	if (!vischeck)
+	if (!visibleCheckInstruction)
+	{
+		printf("[-] %s -> not found visibleCheckInstruction\n", __FUNCTION__);
 		return;
+	}
 
-	memory_utils::patch_instruction(vischeck, "\xB8\x00\x00\x00\x00\x90\x90\x90", 8);*/
-}
+	g_pVisibleCheckPatch = new CShellCodeHelper();
 
-std::uintptr_t GetEntityList()
-{
-	if (!g_RAX_REGISTER_SPECIAL)
-		return 0;
+	g_pVisibleCheckPatch->setup((void*)visibleCheckInstruction);
 
-	return (std::uintptr_t)(g_RAX_REGISTER_SPECIAL) + 0x28;
+	BYTE Patch[] = {
+		0x49, 0x8B, 0x97, 0xE0, 0x01, 0x00, 0x00, //mov rdx, [r15+1e0] !(Copy ClientPlayer from ClientSoldierEntity + 0x1E0)
+		0x48, 0x85, 0xD2, //test rdx, rdx !(Check ClientPlayer for nullptr)
+		0x0F, 0x84, 0x24, 0x00, 0x00, 0x00, //je 36 bytes
+		0xA1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, //mov eax, [g_MyTeamID_ADDRESS] !(Copy my team id to eax)
+		0x39, 0x82, 0xCC, 0x13, 0x00, 0x00, //cmp [rdx+0x13cc], eax !(check for team)
+		0x0F, 0x84, 0x0A, 0x00, 0x00, 0x00, //je 10 bytes
+		0xB8, 0x00, 0x00, 0x00, 0x00, //mov eax, 1 !(Set invisible)
+		0xE9, 0x05, 0x00, 0x00, 0x00, //jmp 5 bytes !(exit from condition)
+		0xB8, 0x01, 0x00, 0x00, 0x00, //mov eax, 0 !(Set visible)
+		0x48, 0xBA, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //mov rdx, 1 !(restore rdx to 1 (info from debugger, maybe required))
+		0x48, 0x3B, 0x77, 0x08, //cmp rsi, [rdi+08] !(Кestoring instructions from the original, the result of which was replaced by our checks)
+	};
+
+	*(std::uintptr_t*)(Patch + 0x11) = (std::uintptr_t)&g_MyTeamID;
+
+	g_pVisibleCheckPatch->patch(Patch, sizeof(Patch), 8);
 }
 
 void HackThread(void* arg)
@@ -257,32 +292,39 @@ void HackThread(void* arg)
 
 	printf("[+] Attach successfully\n");
 
-	if (!CreateHack())
-	{
-		printf("[-] Hack not installed\n");
-		return;
-	}
+	CreateEntityListHack();
 
 	VehicleEspHack();
 
 	SoldierEspHack();
 
-	while (!GetAsyncKeyState(VK_DELETE))
+	while (true)
 	{
+		auto LocalPlayer = GetLocalPlayer();
+
+		if (!LocalPlayer)
+			continue;
+		
 		auto entlist = GetEntityList();
 
 		if (!entlist)
 			continue;
 
-		printf("\n/////////////// START //////////////////\n");
+		printf("\n/////////////// START ///////////////\n");
 
-		printf("\n\nEntity list start: %p\n\n", entlist);
+		auto LocalName = (char*)(LocalPlayer + 0x40);
+
+		g_MyTeamID = *(int*)(LocalPlayer + 0x13CC);
+
+		printf("\nLocal Player: %p | %s | teamid: %d\n", LocalPlayer, LocalName, g_MyTeamID);
+
+		printf("\nEntity list start: %p\n\n", entlist);
 
 		for (auto i = 0; i < 64; i++)
 		{
 			auto entity = *(std::uintptr_t*)(entlist + (0x8 * i));
 
-			if (!entity)
+			if (!entity || entity == LocalPlayer)
 				continue;
 
 			auto name = (char*)(entity + 0x40);
@@ -290,15 +332,13 @@ void HackThread(void* arg)
 			if (!*name || strlen(name) > 50)
 				continue;
 
-			printf("%I64x | %s\n", entity, name);
+			printf("%p | %s\n", entity, name);
 		}
 
-		printf("\n\n/////////////// END //////////////////\n");
+		printf("\n\n/////////////// END ///////////////\n");
 
-		Sleep(1);
+		Sleep(1000);
 	}
-
-	FreeLibraryAndExitThread((HMODULE)arg, 0);
 }
 
 BOOL APIENTRY DllMain( HMODULE hModule,
