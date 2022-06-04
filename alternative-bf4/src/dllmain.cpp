@@ -242,7 +242,7 @@ void SoldierEspHack()
 
 	if (!checkSpottedInstruction)
 	{
-		printf("[-] %s -> not found p\n", __FUNCTION__);
+		printf("[-] %s -> not found checkSpottedInstruction\n", __FUNCTION__);
 		return;
 	}
 
@@ -285,6 +285,67 @@ void SoldierEspHack()
 	g_pVisibleCheckPatch->patch(Patch, sizeof(Patch), 8);
 }
 
+void AllowReloadInScope()
+{
+	/*
+		Address of signature = bf4.exe + 0x00FA9923
+		"\x44\x89\x00\x00\x00\x00\x00\xE9\x00\x00\x00\x00\xA8", "xx?????x????x"
+		"44 89 ? ? ? ? ? E9 ? ? ? ? A8"
+	*/
+
+	auto ScopedCheckAddress = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x44\x89\x00\x00\x00\x00\x00\xE9\x00\x00\x00\x00\xA8", "xx?????x????x");
+
+	if (!ScopedCheckAddress)
+	{
+		printf("[-] %s -> not found ScopedCheckAddress\n", __FUNCTION__);
+		return;
+	}
+
+	memory_utils::fill_memory_region(ScopedCheckAddress, 0x90, 12);
+}
+
+void AllowFireInJump()
+{
+	/*
+		Address of signature = bf4.exe + 0x00F9CBD0
+		"\xC7\x83\xB0\x02\x00\x00\x00\x00\x00\x00\x48\x83\xC4\x20", "xxxxxxxxxxxxxx"
+		"C7 83 B0 02 00 00 00 00 00 00 48 83 C4 20"
+	*/
+
+	auto WriteInJumpMovement = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\xC7\x83\xB0\x02\x00\x00\x00\x00\x00\x00\x48\x83\xC4\x20", "xxxxxxxxxxxxxx");
+
+	if (!WriteInJumpMovement)
+	{
+		printf("[-] %s -> not found WriteInJumpMovement\n", __FUNCTION__);
+		return;
+	}
+
+	memory_utils::fill_memory_region(WriteInJumpMovement, 0x90, 10);
+
+	/*
+		Address of signature = bf4.exe + 0x00F9CBE0
+		"\xC7\x83\xB0\x02\x00\x00\x03\x00\x00\x00\x48\x83\xC4\x20", "xxxxxxxxxxxxxx"
+		"C7 83 B0 02 00 00 03 00 00 00"
+	*/
+
+	auto NoCameraShakeAfterLanding = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\xC7\x83\xB0\x02\x00\x00\x03\x00\x00\x00\x48\x83\xC4\x20", "xxxxxxxxxxxxxx");
+
+	if (!NoCameraShakeAfterLanding)
+	{
+		printf("[-] %s -> not found NoCameraShakeAfterLanding\n", __FUNCTION__);
+		return;
+	}
+
+	memory_utils::fill_memory_region(NoCameraShakeAfterLanding, 0x90, 10);
+}
+
+void CallOfDutyGunplayMod()
+{
+	//AllowReloadInScope();
+
+	AllowFireInJump();
+}
+
 void HackThread(void* arg)
 {
 	if (!Console::Attach("debug"))
@@ -297,6 +358,8 @@ void HackThread(void* arg)
 	VehicleEspHack();
 
 	SoldierEspHack();
+
+	CallOfDutyGunplayMod();
 
 	while (true)
 	{
