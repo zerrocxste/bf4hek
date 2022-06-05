@@ -285,6 +285,25 @@ void SoldierEspHack()
 	g_pVisibleCheckPatch->patch(Patch, sizeof(Patch), 8);
 }
 
+void NoSpreadHack()
+{
+	/*
+		Address of signature = bf4.exe + 0x002D5530
+		"\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xF3\x0F\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xE8", "xx??????xx??????xx??????xx??????x????xx??xx??????xx??????x"
+		"F3 0F ? ? ? ? ? ? F3 0F ? ? ? ? ? ? F3 0F ? ? ? ? ? ? F3 0F ? ? ? ? ? ? E8 ? ? ? ? F3 0F ? ? F3 0F ? ? ? ? ? ? F3 0F ? ? ? ? ? ? E8"
+	*/
+
+	auto multiplicationBySpreadValue = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xF3\x0F\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xE8", "xx??????xx??????xx??????xx??????x????xx??xx??????xx??????x");
+
+	if (!multiplicationBySpreadValue)
+	{
+		printf("[-] %s -> not found readAndMultiplicationSpreadValue\n", __FUNCTION__);
+		return;
+	}
+
+	memory_utils::fill_memory_region(multiplicationBySpreadValue, 0x90, 16);
+}
+
 void AllowReloadInScope()
 {
 	/*
@@ -328,15 +347,15 @@ void AllowFireInJump()
 		"C7 83 B0 02 00 00 03 00 00 00"
 	*/
 
-	auto NoCameraShakeAfterLanding = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\xC7\x83\xB0\x02\x00\x00\x03\x00\x00\x00\x48\x83\xC4\x20", "xxxxxxxxxxxxxx");
+	auto CameraShakeAfterLanding = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\xC7\x83\xB0\x02\x00\x00\x03\x00\x00\x00\x48\x83\xC4\x20", "xxxxxxxxxxxxxx");
 
-	if (!NoCameraShakeAfterLanding)
+	if (!CameraShakeAfterLanding)
 	{
 		printf("[-] %s -> not found NoCameraShakeAfterLanding\n", __FUNCTION__);
 		return;
 	}
 
-	memory_utils::fill_memory_region(NoCameraShakeAfterLanding, 0x90, 10);
+	memory_utils::fill_memory_region(CameraShakeAfterLanding, 0x90, 10);
 }
 
 void CallOfDutyGunplayMod()
@@ -358,6 +377,8 @@ void HackThread(void* arg)
 	VehicleEspHack();
 
 	SoldierEspHack();
+
+	NoSpreadHack();
 
 	CallOfDutyGunplayMod();
 
