@@ -10,6 +10,12 @@
     <Filter Include="src\memory_utils">
       <UniqueIdentifier>{a06bd0a1-0486-4de6-953c-37e9098a5dac}</UniqueIdentifier>
     </Filter>
+    <Filter Include="libs">
+      <UniqueIdentifier>{d2eab4fb-5655-43ef-9219-914dc23bcf97}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libs\minhook">
+      <UniqueIdentifier>{c9cbb50c-ae97-4be4-818d-5cee56b176a9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\dllmain.cpp">
@@ -32,5 +38,13 @@
     <ClInclude Include="src\memory_utils\memory_utils.h">
       <Filter>src\memory_utils</Filter>
     </ClInclude>
+    <ClInclude Include="libs\minhook\minhook.h">
+      <Filter>libs\minhook</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="libs\minhook\minhook.lib">
+      <Filter>libs\minhook</Filter>
+    </Library>
   </ItemGroup>
 </Project>

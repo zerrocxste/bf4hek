@@ -24,9 +24,13 @@
     <ClCompile Include="src\memory_utils\memory_utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="libs\minhook\minhook.h" />
     <ClInclude Include="src\alternative.h" />
     <ClInclude Include="src\console\console.h" />
     <ClInclude Include="src\memory_utils\memory_utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="libs\minhook\minhook.lib" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

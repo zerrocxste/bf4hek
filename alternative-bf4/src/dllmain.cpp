@@ -1,5 +1,8 @@
 ﻿#include "alternative.h"
 
+struct Matrix_s { float m[4][4]; };
+struct Coords_s { float x, y, z; };
+
 class CShellCodeHelper
 {
 private:
@@ -138,8 +141,10 @@ public:
 };
 
 CShellCodeHelper* g_pEntityListGrabber;
+CShellCodeHelper* g_pViewmatrixGrabber;
 
 void* g_RAX_REGISTER_SPECIAL = 0;
+void* g_ViewMatrixAddress = 0;
 
 int g_MyTeamID = 1;
 
@@ -189,6 +194,43 @@ void CreateEntityListHack()
 	*(std::uintptr_t*)((std::uintptr_t)Patch + 0x9) = (std::uintptr_t)&g_RAX_REGISTER_SPECIAL;
 
 	g_pEntityListGrabber->patch(Patch, sizeof(Patch), 7);
+}
+
+void CreateViewmatrixHack()
+{
+	g_pViewmatrixGrabber = new CShellCodeHelper();
+
+	/*
+		Address of signature = bf4.exe + 0x00C02D18
+		"\x0F\x28\x00\x00\x00\x00\x00\x0F\x29\x00\x00\x0F\x28\x00\x00\x00\x00\x00\x0F\x29\x00\x00\x0F\x29\x00\x00\x0F\x28\x00\x00\x00\x00\x00\x0F\x29\x00\x00\x41\x0F", "xx?????xx??xx?????xx??xx??xx?????xx??xx"
+		"0F 28 ? ? ? ? ? 0F 29 ? ? 0F 28 ? ? ? ? ? 0F 29 ? ? 0F 29 ? ? 0F 28 ? ? ? ? ? 0F 29 ? ? 41 0F"
+	*/
+
+	auto PatchAddress = memory_utils::pattern_scanner_module(memory_utils::get_base(), 
+		"\x0F\x28\x00\x00\x00\x00\x00\x0F\x29\x00\x00\x0F\x28\x00\x00\x00\x00\x00\x0F\x29\x00\x00\x0F\x29\x00\x00\x0F\x28\x00\x00\x00\x00\x00\x0F\x29\x00\x00\x41\x0F", 
+		"xx?????xx??xx?????xx??xx??xx?????xx??xx");
+
+	if (!PatchAddress)
+	{
+		printf("[-] %s -> not found\n", __FUNCTION__);
+		return;
+	}
+
+	if (!g_pViewmatrixGrabber->setup((void*)PatchAddress))
+		return;
+
+	BYTE Patch[] = {
+		0x0F, 0x28, 0x86, 0x20, 0x04, 0x00, 0x00, //movaps xmm0, [rsi+420]
+		0x4C, 0x8B, 0xC0, //mov r8, rax
+		0x48, 0x8D, 0x86, 0x20, 0x04, 0x00, 0x00, //lea rax, [rsi+420]
+		0x48, 0xA3, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, //mov [MY_ADDRESS_VIEWMATRIX], rax
+		0x49, 0x8B, 0xC0, //mov rax, r8
+		0x4D, 0x31, 0xC0, //xor r8, r8
+	};
+
+	*(std::uintptr_t*)((std::uintptr_t)Patch + 0x13) = (std::uintptr_t)&g_ViewMatrixAddress;
+
+	g_pViewmatrixGrabber->patch(Patch, sizeof(Patch), 7);
 }
 
 void VehicleEspHack()
@@ -254,46 +296,66 @@ void SoldierEspHack()
 		"41 0F ? ? ? ? ? ? 0F 94 ? 88 44"
 	*/
 
-	auto visibleCheckInstruction = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x41\x0F\x00\x00\x00\x00\x00\x00\x0F\x94\x00\x88\x44", "xx??????xx?xx");
+	//auto visibleCheckInstruction = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\x41\x0F\x00\x00\x00\x00\x00\x00\x0F\x94\x00\x88\x44", "xx??????xx?xx");
 
-	if (!visibleCheckInstruction)
-	{
-		printf("[-] %s -> not found visibleCheckInstruction\n", __FUNCTION__);
-		return;
-	}
+	//if (!visibleCheckInstruction)
+	//{
+	//	printf("[-] %s -> not found visibleCheckInstruction\n", __FUNCTION__);
+	//	return;
+	//}
 
-	g_pVisibleCheckPatch = new CShellCodeHelper();
+	//g_pVisibleCheckPatch = new CShellCodeHelper();
 
-	g_pVisibleCheckPatch->setup((void*)visibleCheckInstruction);
+	//g_pVisibleCheckPatch->setup((void*)visibleCheckInstruction);
 
-	BYTE Patch[] = {
-		0x49, 0x8B, 0x97, 0xE0, 0x01, 0x00, 0x00, //mov rdx, [r15+1e0] !(Copy ClientPlayer from ClientSoldierEntity + 0x1E0)
-		0x48, 0x85, 0xD2, //test rdx, rdx !(Check ClientPlayer for nullptr)
-		0x0F, 0x84, 0x24, 0x00, 0x00, 0x00, //je 36 bytes
-		0xA1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, //mov eax, [g_MyTeamID_ADDRESS] !(Copy my team id to eax)
-		0x39, 0x82, 0xCC, 0x13, 0x00, 0x00, //cmp [rdx+0x13cc], eax !(check for team)
-		0x0F, 0x84, 0x0A, 0x00, 0x00, 0x00, //je 10 bytes
-		0xB8, 0x00, 0x00, 0x00, 0x00, //mov eax, 1 !(Set invisible)
-		0xE9, 0x05, 0x00, 0x00, 0x00, //jmp 5 bytes !(exit from condition)
-		0xB8, 0x01, 0x00, 0x00, 0x00, //mov eax, 0 !(Set visible)
-		0x48, 0xBA, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //mov rdx, 1 !(restore rdx to 1 (info from debugger, maybe required))
-		0x48, 0x3B, 0x77, 0x08, //cmp rsi, [rdi+08] !(Кestoring instructions from the original, the result of which was replaced by our checks)
-	};
+	//BYTE Patch[] = {
+	//	0x49, 0x8B, 0x97, 0xE0, 0x01, 0x00, 0x00, //mov rdx, [r15+1e0] !(Copy ClientPlayer from ClientSoldierEntity + 0x1E0)
+	//	0x48, 0x85, 0xD2, //test rdx, rdx !(Check ClientPlayer for nullptr)
+	//	0x0F, 0x84, 0x24, 0x00, 0x00, 0x00, //je 36 bytes
+	//	0xA1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, //mov eax, [g_MyTeamID_ADDRESS] !(Copy my team id to eax)
+	//	0x39, 0x82, 0xCC, 0x13, 0x00, 0x00, //cmp [rdx+0x13cc], eax !(check for team)
+	//	0x0F, 0x84, 0x0A, 0x00, 0x00, 0x00, //je 10 bytes
+	//	0xB8, 0x00, 0x00, 0x00, 0x00, //mov eax, 1 !(Set invisible)
+	//	0xE9, 0x05, 0x00, 0x00, 0x00, //jmp 5 bytes !(exit from condition)
+	//	0xB8, 0x01, 0x00, 0x00, 0x00, //mov eax, 0 !(Set visible)
+	//	0x48, 0xBA, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //mov rdx, 1 !(restore rdx to 1 (info from debugger, maybe required))
+	//	0x48, 0x3B, 0x77, 0x08, //cmp rsi, [rdi+08] !(Кestoring instructions from the original, the result of which was replaced by our checks)
+	//};
 
-	*(std::uintptr_t*)(Patch + 0x11) = (std::uintptr_t)&g_MyTeamID;
+	//*(std::uintptr_t*)(Patch + 0x11) = (std::uintptr_t)&g_MyTeamID;
 
-	g_pVisibleCheckPatch->patch(Patch, sizeof(Patch), 8);
+	//g_pVisibleCheckPatch->patch(Patch, sizeof(Patch), 8);
 }
 
 void NoSpreadHack()
 {
+	/*
+		Address of signature = bf4.exe + 0x002D39D0
+		"\xF3\x0F\x00\x00\x00\x00\x00\x00\xC3\xCC\xCC\xCC\xCC\xCC\xCC\xCC\x48\x89\x00\x00\x00\x48\x89\x00\x00\x00\x48\x89\x00\x00\x00\x57\x48\x83\xEC\x00\xC6\x81\x19\x03\x00\x00", "xx??????xxxxxxxxxx???xx???xx???xxxx?xxxxxx"
+		"F3 0F ? ? ? ? ? ? C3 CC CC CC CC CC CC CC 48 89 ? ? ? 48 89 ? ? ? 48 89 ? ? ? 57 48 83 EC ? C6 81 19 03 00 00"
+	*/
+
+	auto crosshairReadSpread = memory_utils::pattern_scanner_module(memory_utils::get_base(),
+		"\xF3\x0F\x00\x00\x00\x00\x00\x00\xC3\xCC\xCC\xCC\xCC\xCC\xCC\xCC\x48\x89\x00\x00\x00\x48\x89\x00\x00\x00\x48\x89\x00\x00\x00\x57\x48\x83\xEC\x00\xC6\x81\x19\x03\x00\x00", 
+		"xx??????xxxxxxxxxx???xx???xx???xxxx?xxxxxx");
+
+	if (!crosshairReadSpread)
+	{
+		printf("[-] %s -> not found crosshairReadSpread\n", __FUNCTION__);
+		return;
+	}
+
+	memory_utils::patch_instruction(crosshairReadSpread, "\xB8\xCD\xCC\x4C\x3E\x66\x0F\x6E\xC0\xC3", 10);
+
 	/*
 		Address of signature = bf4.exe + 0x002D5530
 		"\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xF3\x0F\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xE8", "xx??????xx??????xx??????xx??????x????xx??xx??????xx??????x"
 		"F3 0F ? ? ? ? ? ? F3 0F ? ? ? ? ? ? F3 0F ? ? ? ? ? ? F3 0F ? ? ? ? ? ? E8 ? ? ? ? F3 0F ? ? F3 0F ? ? ? ? ? ? F3 0F ? ? ? ? ? ? E8"
 	*/
 
-	auto multiplicationBySpreadValue = memory_utils::pattern_scanner_module(memory_utils::get_base(), "\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xF3\x0F\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xE8", "xx??????xx??????xx??????xx??????x????xx??xx??????xx??????x");
+	auto multiplicationBySpreadValue = memory_utils::pattern_scanner_module(memory_utils::get_base(), 
+		"\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xF3\x0F\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xF3\x0F\x00\x00\x00\x00\x00\x00\xE8", 
+		"xx??????xx??????xx??????xx??????x????xx??xx??????xx??????x");
 
 	if (!multiplicationBySpreadValue)
 	{
@@ -365,14 +427,244 @@ void CallOfDutyGunplayMod()
 	AllowFireInJump();
 }
 
+inline bool WorldToScreen(Matrix_s Matrix, const Coords_s& vIn, float* flOut);
+
+namespace FrostbiteRender
+{
+	using fDrawLine = void(__fastcall*)(__int64 pYaNeZnayuChtoEtoTakoe, float* pPoint1, float* pPoint2, int Color);
+	fDrawLine pfDrawLine = nullptr;
+
+	using fDrawFilledRect = void(__fastcall*)(__int64 pYaNeZnayuChtoEtoTakoe, float* pPoint1, float* pPoint2, int Color);
+	fDrawFilledRect pfDrawFilledRect = nullptr;
+
+	using fGetScreenSize = int* (__fastcall*)(__int64 pYaNeZnayuChtoEtoTakoe/*A nahuya?*/, int* pOutScreenSize);
+	fGetScreenSize pfGetScreenSize = nullptr;
+
+	void DrawLine(__int64 pYaNeZnayuChtoEtoTakoe, int x, int y, int x1, int y1, std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255)
+	{
+		if (!pfDrawLine)
+			return;
+
+		float P1[2]{ x, y };
+		float P2[2]{ x1, y1 };
+
+		int Color = 0x000000FF;
+		auto pColor = (std::uint8_t*)&Color;
+		pColor[0] = r;
+		pColor[1] = g;
+		pColor[2] = b;
+		pColor[3] = a;
+
+		pfDrawLine(pYaNeZnayuChtoEtoTakoe, P1, P2, Color);
+	}
+
+	void DrawRect(__int64 pYaNeZnayuChtoEtoTakoe, float x, float y, float x1, float y1, std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255)
+	{
+		DrawLine(pYaNeZnayuChtoEtoTakoe, x, y, x1, y, r, g, b, a);
+		DrawLine(pYaNeZnayuChtoEtoTakoe, x, y, x, y1, r, g, b, a);
+		DrawLine(pYaNeZnayuChtoEtoTakoe, x, y1, x1, y1, r, g, b, a);
+		DrawLine(pYaNeZnayuChtoEtoTakoe, x1, y, x1, y1, r, g, b, a);
+	}
+
+	void DrawFilledRect(__int64 pYaNeZnayuChtoEtoTakoe, int x, int y, int x1, int y1, std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255)
+	{
+		if (!pfDrawFilledRect)
+			return;
+
+		float P1[2]{ x, y };
+		float P2[2]{ x1, y1 };
+
+		int Color = 0x000000FF;
+		auto pColor = (std::uint8_t*)&Color;
+		pColor[0] = r;
+		pColor[1] = g;
+		pColor[2] = b;
+		pColor[3] = a;
+
+		pfDrawFilledRect(pYaNeZnayuChtoEtoTakoe, P1, P2, Color);
+	}
+
+	int* GetScreenSize()
+	{
+		int ScreenSize[2]{ 0, 0 };
+
+		if (!pfGetScreenSize)
+			return ScreenSize;
+		
+		return pfGetScreenSize(0, ScreenSize);
+	}
+
+	using fGetRenderBaseFunction = __int64(__fastcall*)(__int64 param_1, __int64 param_2, __int64 param_3, __int64 param_4);
+	fGetRenderBaseFunction pfGetRenderBaseFunction = nullptr;
+
+	__int64 __fastcall GetRenderBase_proxy(__int64 param_1, __int64 param_2, __int64 param_3, __int64 param_4)
+	{
+		auto ret = pfGetRenderBaseFunction(param_1, param_2, param_3, param_4);
+
+		if (ret && !param_2 && !param_3 && !param_4)
+		{
+			auto ESP = [&]() -> void {
+
+				auto LocalPlayer = GetLocalPlayer();
+
+				if (!LocalPlayer)
+					return;
+
+				auto EntityList = GetEntityList();
+
+				if (!EntityList)
+					return;
+
+				auto LocalName = (char*)(LocalPlayer + 0x40);
+
+				g_MyTeamID = *(int*)(LocalPlayer + 0x13CC);
+
+				Matrix_s matrix{};
+				
+				if (g_ViewMatrixAddress)
+					matrix = *(Matrix_s*)(g_ViewMatrixAddress);
+
+				for (auto i = 0; i < 64; i++)
+				{
+					auto Entity = *(std::uintptr_t*)(EntityList + (0x8 * i));
+
+					if (!Entity || Entity == LocalPlayer)
+						continue;
+
+					auto TeamID = *(int*)(Entity + 0x13CC);
+
+					if (g_MyTeamID == TeamID)
+						continue;
+
+					auto Name = (char*)(Entity + 0x40);
+
+					if (!*Name || strlen(Name) > 50)
+						continue;
+
+					auto Soldier = *(std::uintptr_t*)(Entity + 0x14D0);
+
+					if (!Soldier)
+						continue;
+
+					auto Coords = *(Coords_s*)(Soldier + 0x1890);
+					
+					float ScreenBot[2]{}, ScreenTop[2]{};
+					if (WorldToScreen(matrix, Coords, ScreenBot) && WorldToScreen(matrix, Coords_s{ Coords.x, Coords.y + 1.5f, Coords.z }, ScreenTop))
+					{
+						float h = ScreenBot[1] - ScreenTop[1];
+						float w = h / 2;
+						float x = ScreenBot[0] - w / 2;
+						float y = ScreenTop[1];
+
+						DrawRect(ret, x, y, x + w, y + h, 255, 0, 0);
+					}
+				}
+			};
+
+			ESP();
+		}
+
+		return ret;
+	}
+
+	void InitializeRender()
+	{
+		/*
+			Address of signature = bf4.exe + 0x0063D0C0
+			"\x48\x8B\x00\x00\x00\x00\x00\x48\x85\x00\x75\x00\x33\xC0\xC3\xE9\x00\x00\x00\x00\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\x40\x00\x48\x83\xEC", "xx?????xx?x?xxxx????xxxxxxxxxxxxx?xxx"
+			"48 8B ? ? ? ? ? 48 85 ? 75 ? 33 C0 C3 E9 ? ? ? ? CC CC CC CC CC CC CC CC CC CC CC CC 40 ? 48 83 EC"
+		*/
+
+		auto GetRenderBase = (void*)memory_utils::pattern_scanner_module(
+			memory_utils::get_base(),
+			"\x48\x8B\x00\x00\x00\x00\x00\x48\x85\x00\x75\x00\x33\xC0\xC3\xE9\x00\x00\x00\x00\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\x40\x00\x48\x83\xEC",
+			"xx?????xx?x?xxxx????xxxxxxxxxxxxx?xxx");
+
+		MH_CreateHook(GetRenderBase, GetRenderBase_proxy, (LPVOID*)&pfGetRenderBaseFunction);
+		MH_EnableHook(GetRenderBase);
+
+		/*
+			Address of signature = bf4.exe + 0x0063DEB0
+			"\x48\x89\x00\x00\x00\x44\x89\x00\x00\x00\x57\x48\x83\xEC\x00\x48\x8B\x00\xBA", "xx???xx???xxxx?xx?x"
+			"48 89 ? ? ? 44 89 ? ? ? 57 48 83 EC ? 48 8B ? BA"
+		*/
+
+		pfDrawLine = (fDrawLine)memory_utils::pattern_scanner_module(
+			memory_utils::get_base(),
+			"\x48\x89\x00\x00\x00\x44\x89\x00\x00\x00\x57\x48\x83\xEC\x00\x48\x8B\x00\xBA",
+			"xx???xx???xxxx?xx?x");
+
+		/*
+			Address of signature = bf4.exe + 0x0063E0B0
+			"\x48\x8B\x00\x48\x89\x00\x00\x48\x89\x00\x00\x44\x89\x00\x00\x57\x48\x83\xEC\x00\x0F\x29", "xx?xx??xx??xx??xxxx?xx"
+			"48 8B ? 48 89 ? ? 48 89 ? ? 44 89 ? ? 57 48 83 EC ? 0F 29"
+		*/
+
+		pfDrawFilledRect = (fDrawFilledRect)memory_utils::pattern_scanner_module(
+			memory_utils::get_base(),
+			"\x48\x8B\x00\x48\x89\x00\x00\x48\x89\x00\x00\x44\x89\x00\x00\x57\x48\x83\xEC\x00\x0F\x29",
+			"xx?xx??xx??xx??xxxx?xx");
+
+		/*
+			Address of signature = bf4.exe + 0x0063F8B0
+			"\x8B\x05\x00\x00\x00\x00\x89\x02\x8B\x05\x00\x00\x00\x00\x89\x42\x00\x48\x8B", "xx????xxxx????xx?xx"
+			"8B 05 ? ? ? ? 89 02 8B 05 ? ? ? ? 89 42 ? 48 8B"
+		*/
+
+		pfGetScreenSize = (fGetScreenSize)memory_utils::pattern_scanner_module(
+			memory_utils::get_base(),
+			"\x8B\x05\x00\x00\x00\x00\x89\x02\x8B\x05\x00\x00\x00\x00\x89\x42\x00\x48\x8B", 
+			"xx????xxxx????xx?xx");
+	}
+}
+
+inline bool WorldToScreen(Matrix_s Matrix, const Coords_s& vIn, float* flOut)
+{
+	auto view_projection = Matrix;
+
+	float w = view_projection.m[0][3] * vIn.x + view_projection.m[1][3] * vIn.y + view_projection.m[2][3] * vIn.z + view_projection.m[3][3];
+
+	if (w < 0.01)
+		return false;
+
+	flOut[0] = view_projection.m[0][0] * vIn.x + view_projection.m[1][0] * vIn.y + view_projection.m[2][0] * vIn.z + view_projection.m[3][0];
+	flOut[1] = view_projection.m[0][1] * vIn.x + view_projection.m[1][1] * vIn.y + view_projection.m[2][1] * vIn.z + view_projection.m[3][1];
+
+	float invw = 1.0f / w;
+
+	flOut[0] *= invw;
+	flOut[1] *= invw;
+
+	int width, height;
+
+	auto disp = FrostbiteRender::GetScreenSize();
+	width = disp[0];
+	height = disp[1];
+
+	float x = (float)width / 2;
+	float y = (float)height / 2;
+
+	x += 0.5 * flOut[0] * (float)width + 0.5;
+	y -= 0.5 * flOut[1] * (float)height + 0.5;
+
+	flOut[0] = x;
+	flOut[1] = y;
+
+	return true;
+}
+
 void HackThread(void* arg)
 {
 	if (!Console::Attach("debug"))
 		return;
 
+	MH_Initialize();
+
 	printf("[+] Attach successfully\n");
 
 	CreateEntityListHack();
+
+	CreateViewmatrixHack();
 
 	VehicleEspHack();
 
@@ -382,9 +674,11 @@ void HackThread(void* arg)
 
 	CallOfDutyGunplayMod();
 
+	FrostbiteRender::InitializeRender();
+
 	while (true)
 	{
-		auto LocalPlayer = GetLocalPlayer();
+		/*auto LocalPlayer = GetLocalPlayer();
 
 		if (!LocalPlayer)
 			continue;
@@ -421,7 +715,7 @@ void HackThread(void* arg)
 
 		printf("\n\n/////////////// END ///////////////\n");
 
-		Sleep(1000);
+		Sleep(1000);*/
 	}
 }
 
