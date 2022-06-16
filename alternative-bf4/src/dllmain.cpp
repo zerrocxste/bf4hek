@@ -440,7 +440,7 @@ namespace FrostbiteRender
 	using fGetScreenSize = int* (__fastcall*)(__int64 pYaNeZnayuChtoEtoTakoe/*A nahuya?*/, int* pOutScreenSize);
 	fGetScreenSize pfGetScreenSize = nullptr;
 
-	void DrawLine(__int64 pYaNeZnayuChtoEtoTakoe, int x, int y, int x1, int y1, std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255)
+	void DrawLine(__int64 pYaNeZnayuChtoEtoTakoe, float x, float y, float x1, float y1, std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255)
 	{
 		if (!pfDrawLine)
 			return;
@@ -466,7 +466,7 @@ namespace FrostbiteRender
 		DrawLine(pYaNeZnayuChtoEtoTakoe, x1, y, x1, y1, r, g, b, a);
 	}
 
-	void DrawFilledRect(__int64 pYaNeZnayuChtoEtoTakoe, int x, int y, int x1, int y1, std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255)
+	void DrawFilledRect(__int64 pYaNeZnayuChtoEtoTakoe, float x, float y, float x1, float y1, std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255)
 	{
 		if (!pfDrawFilledRect)
 			return;
@@ -503,6 +503,8 @@ namespace FrostbiteRender
 
 		if (ret && !param_2 && !param_3 && !param_4)
 		{
+			//DrawRect(ret, 10.f, 10.f, 20.f, 20.f, 255, 0, 0);
+
 			auto ESP = [&]() -> void {
 
 				auto LocalPlayer = GetLocalPlayer();
@@ -528,7 +530,10 @@ namespace FrostbiteRender
 				{
 					auto Entity = *(std::uintptr_t*)(EntityList + (0x8 * i));
 
-					if (!Entity || Entity == LocalPlayer)
+					if (!memory_utils::is_valid_ptr((void*)Entity))
+						continue;
+
+					if (Entity == LocalPlayer)
 						continue;
 
 					auto TeamID = *(int*)(Entity + 0x13CC);
@@ -543,7 +548,7 @@ namespace FrostbiteRender
 
 					auto Soldier = *(std::uintptr_t*)(Entity + 0x14D0);
 
-					if (!Soldier)
+					if (!memory_utils::is_valid_ptr((void*)Soldier))
 						continue;
 
 					auto Coords = *(Coords_s*)(Soldier + 0x1890);
@@ -569,20 +574,6 @@ namespace FrostbiteRender
 
 	void InitializeRender()
 	{
-		/*
-			Address of signature = bf4.exe + 0x0063D0C0
-			"\x48\x8B\x00\x00\x00\x00\x00\x48\x85\x00\x75\x00\x33\xC0\xC3\xE9\x00\x00\x00\x00\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\x40\x00\x48\x83\xEC", "xx?????xx?x?xxxx????xxxxxxxxxxxxx?xxx"
-			"48 8B ? ? ? ? ? 48 85 ? 75 ? 33 C0 C3 E9 ? ? ? ? CC CC CC CC CC CC CC CC CC CC CC CC 40 ? 48 83 EC"
-		*/
-
-		auto GetRenderBase = (void*)memory_utils::pattern_scanner_module(
-			memory_utils::get_base(),
-			"\x48\x8B\x00\x00\x00\x00\x00\x48\x85\x00\x75\x00\x33\xC0\xC3\xE9\x00\x00\x00\x00\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\x40\x00\x48\x83\xEC",
-			"xx?????xx?x?xxxx????xxxxxxxxxxxxx?xxx");
-
-		MH_CreateHook(GetRenderBase, GetRenderBase_proxy, (LPVOID*)&pfGetRenderBaseFunction);
-		MH_EnableHook(GetRenderBase);
-
 		/*
 			Address of signature = bf4.exe + 0x0063DEB0
 			"\x48\x89\x00\x00\x00\x44\x89\x00\x00\x00\x57\x48\x83\xEC\x00\x48\x8B\x00\xBA", "xx???xx???xxxx?xx?x"
@@ -613,8 +604,22 @@ namespace FrostbiteRender
 
 		pfGetScreenSize = (fGetScreenSize)memory_utils::pattern_scanner_module(
 			memory_utils::get_base(),
-			"\x8B\x05\x00\x00\x00\x00\x89\x02\x8B\x05\x00\x00\x00\x00\x89\x42\x00\x48\x8B", 
+			"\x8B\x05\x00\x00\x00\x00\x89\x02\x8B\x05\x00\x00\x00\x00\x89\x42\x00\x48\x8B",
 			"xx????xxxx????xx?xx");
+
+		/*
+			Address of signature = bf4.exe + 0x0063D0C0
+			"\x48\x8B\x00\x00\x00\x00\x00\x48\x85\x00\x75\x00\x33\xC0\xC3\xE9\x00\x00\x00\x00\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\x40\x00\x48\x83\xEC", "xx?????xx?x?xxxx????xxxxxxxxxxxxx?xxx"
+			"48 8B ? ? ? ? ? 48 85 ? 75 ? 33 C0 C3 E9 ? ? ? ? CC CC CC CC CC CC CC CC CC CC CC CC 40 ? 48 83 EC"
+		*/
+
+		auto GetRenderBase = (void*)memory_utils::pattern_scanner_module(
+			memory_utils::get_base(),
+			"\x48\x8B\x00\x00\x00\x00\x00\x48\x85\x00\x75\x00\x33\xC0\xC3\xE9\x00\x00\x00\x00\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\xCC\x40\x00\x48\x83\xEC",
+			"xx?????xx?x?xxxx????xxxxxxxxxxxxx?xxx");
+
+		MH_CreateHook(GetRenderBase, GetRenderBase_proxy, (LPVOID*)&pfGetRenderBaseFunction);
+		MH_EnableHook(GetRenderBase);
 	}
 }
 
